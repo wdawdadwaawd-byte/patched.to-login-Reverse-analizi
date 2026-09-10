@@ -1,390 +1,193 @@
-# cntsw.js — Deobfuscation Raporu
+# patched.revere
 
-## Kaynak
-- URL: `https://challenge.patched.to/s/c296b4bcca757cce597a015732b00b87/cntsw.js`
-- Dosya boyutu: ~170 KB (tek satır, minify + obfuscate edilmiş)
-- Wrapper comment: `/*1a477716477c11a55b9*/`
+`challenge.patched.to` üzerinde çalışan **Continental CAPTCHA** widget'ının reverse engineering çalışması.
 
 ---
 
-## 1. Obfuscation Katmanları
+## Hedef
 
-### Katman 1 — Outer Wrapper IIFE
-```js
-(function(X9Mu, lN) {
-    var fKti = "1bcf377";
-    // ...tüm kod buraya gömülü...
-})(void 0, void 0);
-```
-Parametre olarak `void 0` geçildiği için X9Mu ve lN hiçbir zaman kullanılmıyor. Salt wrapper, debugging'i zorlaştırmak için.
-
-### Katman 2 — String Encoding (Base91 benzeri custom codec)
-Dosyada **2 ayrı IIFE** var, her biri kendi custom base91 decoder'ını içeriyor:
-
-**İlk IIFE (pos ~61):**
-- Alphabet: `E,MW8AfL>n7#mG+/h9"xaF;}Cb<XI4:TgR_HJ[c2ts3YB%j6=qoevp^kZQr!DO0~uwiK&1$P{.(Sz@y)|VN]?l5U*\`d`
-- Fonksiyon: `b(n)` → `d[n]` stringini decode eder
-- Kullanım amacı: MessagePack library stringleri (encode/decode, byteLength vb.)
-
-**İkinci IIFE (pos ~31297):**
-- Alphabet: `;)8w\`J?{0E:z_1HRWN&,jOi=dk5}6Qa^]*~|YhDPIc[KMVF/m3.2v>bZy@XSu9L<ex74CtBf$o!T%s#pArq(+lgGn"U`
-- Fonksiyon: `e(n)` → `d[n]` stringini decode eder
-- **Ana kod bu IIFE içinde** — 4506 adet `e(N)` çağrısı var
-
-### Katman 3 — String Tablosu
-`d[]` array'inde **1438 adet** encoded string mevcut. Decoded olanlar:
-- Index 0–93: İçerik hash/token gibi görünen rastgele string'ler (integrity token'ları)
-- Index 94+: Gerçek JS property adları ve değerleri
+`patched.to` login sayfasında kullanılan Continental CAPTCHA sisteminin nasıl çalıştığını anlamak:
+- `api.js` ve `cntsw.js` dosyalarının deobfuscation'ı
+- `/api/c` (challenge al) ve `/api/q` (cevap doğrulat) endpoint'lerinin protokolünü çözmek
+- Geçerli token üretebilmek
 
 ---
 
-## 2. Kütüphaneler — Ne Var İçinde?
+## Proje Yapısı
 
-Decode edilen string'lerden anlaşılan gömülü kütüphaneler:
-
-### 2.1 MessagePack (msgpack) — Tam Embed
 ```
-register, encode, decode, encoders, decoders
-builtInEncoders, builtInDecoders, tryToEncode
-encodeNil, encodeBoolean, encodeNumber, encodeString
-encodeArray, encodeMap, encodeBinary, encodeExtension
-decodeSync, decodeAsync, decodeArrayStream, decodeStream
+patched.revere/
+│
+├── target_files/          Ham hedef dosyalar
+│   ├── api.js.downloaded      İndirilen api.js (obfuscated)
+│   ├── cntsw.js               iframe içinde çalışan widget kodu (~170KB, tek satır)
+│   ├── challenge.html         Test için lokal widget HTML sayfası
+│   └── pasted-text (1).txt    Ham notlar / yapıştırılan içerik
+│
+├── fetch_and_extract/     Dosya çekme ve ilk parse işlemleri
+│   ├── fetch_apijs.js         api.js'i challenge.patched.to'dan HTTPS ile indirir
+│   ├── intercept_apijs.js     api.js içindeki b(N) çağrılarını decode edip iframe URL'lerini bulur
+│   ├── read_apijs.js          api.js içindeki string'leri, fonksiyon yapısını ve URL'leri listeler
+│   ├── extract2.js            cntsw.js içindeki d[] array'inin kaç eleman içerdiğini bulur
+│   ├── parse2.js              d[] array'ini karakter bazlı parse eder ve decode eder
+│   └── parse3.js              cntsw.js'e __msgDecode hook'u enjekte ederek mesaj akışını yakalar
+│
+├── decode_and_deobf/      String decode ve deobfuscation katmanı
+│   ├── decode.js              cntsw.js IIFE-1 (alpha1) ile tüm d[] string'lerini decode eder
+│   ├── decode2.js             IIFE-2 (alpha2, ";)8w..." başlıyor) ile KDF-related string'leri decode eder
+│   ├── decoder.js             cntsw.js'i eval ile sandbox'ta çalıştırır, e(N) fonksiyonunu hook'lar
+│   ├── decode_api.js          api.js d[] array'ini OUTER_ALPHA ile decode eder, alan isimlerini bulur
+│   ├── decode_apijs_full.js   api.js'i tamamen decode eder; sitekey, /api/c bağlamını çıkarır
+│   ├── decode_both.js         İki farklı alpha (alpha1/alpha2) ile decode karşılaştırması yapar
+│   ├── decode_iframe_url.js   api.js'deki iframe src oluşturan b(N) çağrılarını decode eder
+│   ├── decode_inner_iifes.js  api.js içindeki çoklu IIFE decoder'larını (alpha'ları) keşfeder
+│   ├── run_decode.js          cntsw.js d[] array'ini eval + wrapper ile decode eder
+│   └── cntsw_deobf.js         cntsw.js'in tamamen açıklamalı / deobfuscated versiyonu
+│
+├── find_and_analyze/      Spesifik değerleri ve yapıları bulma
+│   ├── findkey.js             decoded_strings.json içinde siteKey/sk alanlarını arar
+│   ├── findkey2.js            both_decoded.json içinde alpha2 ile siteKey varyasyonlarını arar
+│   ├── find_apic_call.js      cntsw.js IIFE-2 içindeki p() fonksiyonunu ve /api/c çağrısını bulur
+│   ├── find_init_endpoint.js  API endpoint'lerini probe eder; cntsw.js decoded string'lerden path çıkarır
+│   ├── find_m_in_iife2.js     IIFE-2 scope'unda msgpack m() fonksiyonunu lokalize eder
+│   ├── find_n_func.js         api.js'deki N() = render() fonksiyonunu decode edilmiş b(N) ile gösterir
+│   ├── find_render.js         cntsw.js içinde render akışının başladığı p tanımlarını bulur
+│   ├── find_sitekey.js        patched.to sayfalarını tarayarak sitekey'i doğrudan HTML'de arar
+│   ├── find_type_map.js       challenge type → sayısal değer mapping'ini ve G objesini analiz eder
+│   └── sitkey.php             sitekey extraction için PHP yardımcı scripti
+│
+├── test_and_validate/     /api/c ve /api/q endpoint testleri
+│   ├── test_api.js            test-sitekey ile ilk /api/c POST denemesi (msgpack)
+│   ├── test_api2.js           Farklı siteKey formatlarını karşılaştırmalı test eder
+│   ├── test_api3.js           URL hash'i ve fingerprint ile /api/c denemesi
+│   ├── test_continental_path.js  Continental path varyasyonlarını test eder
+│   ├── test_fresh.js          Temiz session ile /api/c denemesi
+│   ├── test_hashkey.js        BLAKE2b tabanlı KDF (key derivation) varyantlarını test eder; XChaCha20 ile response decrypt dener
+│   ├── test_real.js           Gerçek siteKey (MCow...) ile /api/c denemesi
+│   └── test_real2.js          Gerçek siteKey + cdata + challengeType kombinasyonlarını test eder
+│
+├── output_and_results/    Decode çıktıları ve analiz sonuçları
+│   ├── decoded_strings.json   cntsw.js IIFE-1 alpha ile decode edilmiş tüm d[] string'leri
+│   ├── both_decoded.json      alpha1 ve alpha2 karşılaştırmalı decode sonuçları
+│   ├── strings_full.json      Tüm d[] string'leri (ham + decode edilmiş)
+│   ├── api_readable.js        api.js içindeki b(N) çağrıları decode edilmiş string'lerle değiştirilmiş
+│   └── api_all_decoded.txt    api.js d[] array'inin tüm index → decoded string listesi
+│
+├── widget_and_token/      Widget çalıştırma ve token üretimi
+│   ├── debug_widget.js        Puppeteer ile lokal server üzerinde gerçek widget'ı headless çalıştırır; postMessage akışını ve /api/* trafiğini loglar
+│   ├── get_widget_cookie.js   Widget iframe URL'ini GET ederek session cookie almayı dener; /api/c payload varyasyonlarını test eder
+│   ├── iframe_approach.js     api.js'deki decoded string'lerden iframe URL'ini bulur; /s/<hash>/ path'lerini probe eder
+│   └── token_generator.js     Token üretim implementasyonu
+│
+└── reports/               Notlar ve raporlar
+    ├── DEOBF_RAPOR.md         Deobfuscation bulguları raporu
+    └── hata raporu.txt        Hata notları
 ```
-İstek/cevap iletişimi için MessagePack binary formatı kullanılıyor. JSON değil.
-
-### 2.2 Noble Hashes (SHA-256/384/512 + BLAKE) — Tam Embed
-```
-SHA-256, SHA-384, SHA-512
-0x428a2f98d728ae22  ← SHA-256 round constant
-0x7137449123ef65cd
-... (64 adet SHA-256 sabiti)
-...
-outputLen, blockLen, padOffset, roundClean
-digestInto, digest, destroy, create
-```
-Proof-of-Work (PoW) çözümü için kriptografik hash.
-
-### 2.3 ChaCha20 (stream cipher) — Tam Embed
-```
-expand 16-byte k
-expand 32-byte k
-arx: counter overflow
-arx: invalid block position
-encrypt, decrypt
-nonce, tagLength, AAD
-cannot encrypt() twice with same key + nonce
-```
-Network iletişimini şifrelemek için kullanılıyor (challenge/verify API çağrıları).
-
-### 2.4 Continental CAPTCHA Framework — Ana Mantık
-Bu asıl ürün. Aşağıdaki bölümler var:
 
 ---
 
-## 3. Ana Uygulama Mantığı — "Continental CAPTCHA"
+## Teknik Bulgular
 
-### 3.1 Widget Durumları (State Machine)
-```
-idle       → Başlangıç
-verifying  → "Verifying..."
-verified   → "Verification complete"
-expired    → "Verification expired"
-error      → "Verification failed"
-failed     → Kullanıcı yanlış yanıt verdi
-```
+### Obfuscation Yapısı
 
-### 3.2 CSS Selector'lar (Widget DOM yapısı)
-```css
-.continental-widget
-.continental-main
-.continental-checkbox
-.continental-label
-.continental-status
-.continental-hint
-.continental-progress-bar
-.continental-error-banner
-#continental-logo
-```
+**api.js** (outer IIFE):
+- `OUTER_ALPHA = }>J2Nt.^m7IH]...` ile base91 encode edilmiş d[] string tablosu
+- `b(N)` → `d[N]`'i decode eder
+- `render()` fonksiyonu bir `<iframe>` oluşturur; `src` base URL + siteKey hash + query parametreleri
 
-### 3.3 Desteklenen CAPTCHA Challenge Tipleri
-| Tip | Açıklama | Kullanıcı mesajı |
-|-----|----------|------------------|
-| `gobang` | Beşli/satır tamamlama bulmacası | "Complete the puzzle" |
-| `slide` | Kaydırmalı puzzle parçası | "Slide the puzzle piece" |
-| `rotate` | Görüntü döndürme | "Rotate the image" |
-| `icon` | Doğru ikonlara tıklama | "Click the target icons" |
-| `swap` | Orb'ları takas etme | "Swap the orbs" |
-| `emoji_swap` | Emoji eşleştirme | "Match the emojis" |
-| `shortest_line` | En kısa çizgiyi bulma | "Click the shortest line" |
-| `x_marker` | X pattern eşleştirme | "Match the shape to the X pattern" |
-| `height_match` | Yükseklik eşleştirme | "Click the matching target" |
-| `line_break` | Kırık çizgiyi bulma | "Find the break in the line" |
+**cntsw.js** (iframe içindeki widget):
+- İki katmanlı obfuscation: IIFE-1 (alpha1) ve IIFE-2 (alpha2 = `;)8w...`)
+- `e(N)` → d[N]'i decode eder (4506 kullanım, 1438 string)
+- Gömülü kütüphaneler: `@msgpack/msgpack`, `@noble/hashes`, `@noble/ciphers`
 
-### 3.4 API Endpoint'leri
+### Protokol
+
 ```
-POST /api/c   ← Challenge alma (siteKey, widgetId gönderilir)
-POST /api/q   ← Cevap gönderme / verification
+parent page
+    └─► window.continental.render(siteKey, container, options)
+            │
+            └─► <iframe src="https://challenge.patched.to/c/<hash>?widgetId=...">
+                    │  (postMessage bridge)
+                    ├─► CONFIG  → widget başlatma
+                    ├─► EXECUTE → verification başlat
+                    │
+                    ├─── POST /api/c (msgpack + ChaCha20)  ← challenge al
+                    │    payload: { sitekey, widgetId, cdata, beh, ... }
+                    │
+                    └─── POST /api/q (msgpack)              ← cevap doğrulat
+                         response: { token }
+                              │
+                              └─► postMessage VERIFIED { token }
 ```
 
-### 3.5 Parent ↔ IFrame Mesajlaşması (postMessage)
-Widget bir `<iframe>` içinde çalışıyor. Parent ile mesajlaşma şeması:
+### API
 
-**Parent'tan Widget'a:**
-| type | Açıklama |
-|------|----------|
-| `CONFIG` | Widget başlatma parametreleri |
-| `EXECUTE` | Verification başlat |
-| `RESET` | Sıfırla |
-| `BEHAVIOR` | Behavior data gönder |
-| `PROXY_FETCH_RESPONSE` | Network proxy cevabı |
-| `GOBANG_ANSWER` / `SLIDE_ANSWER` / ... | Kullanıcı cevabı |
-| `GOBANG_CANCEL` / `SLIDE_CANCEL` / ... | Kullanıcı iptal |
-| `GOBANG_REFRESH` / `SLIDE_REFRESH` / ... | Yenile |
+| Endpoint | Method | Encoding | Açıklama |
+|----------|--------|----------|----------|
+| `/api/c` | POST | MessagePack + XChaCha20 | Challenge al |
+| `/api/q` | POST | MessagePack | Cevap gönder, token al |
 
-**Widget'tan Parent'a:**
-| type | Açıklama |
-|------|----------|
-| `READY` | Widget hazır |
-| `VERIFIED` | Doğrulama başarılı, token içeriyor |
-| `ERROR` | Hata kodu ve mesaj |
-| `SHOW_WIDGET` | Challenge gösterildi |
-| `HIDE_WIDGET` | Widget gizlendi |
-| `CHALLENGE_FAILED` | Challenge başarısız |
-| `RESIZE` | iframe boyut değişikliği |
-| `THEME_CHANGE` | Tema değişikliği (dark/light) |
-| `PROXY_FETCH_REQUEST` | Parent'tan network isteği iste |
-
-### 3.6 CONFIG Parametreleri (Parent'tan gelen)
-```js
+**`/api/c` payload alanları:**
+```json
 {
-    widgetId: "...",
-    baseUrl: "...",           // API base URL
-    challengeUrl: "...",      // /api/c URL
-    verifyUrl: "...",         // /api/q URL
-    siteKey: "...",
-    theme: "auto"|"light"|"dark",
-    size: "normal",
-    hideLogo: false,
-    strings: { ... },         // Override UI metinleri
-    workers: N,               // PoW worker sayısı
-    simulateDevice: "...",    // Test için cihaz simülasyonu
-    bridgeVersion: 1,
-    invisible: boolean,       // Invisible mod
-    parentOrigin: "...",
-    cdata: "...",             // Custom data (1-255 alfanümerik)
-    hl: "...",                // Language hint
-    difficulty: N,
-    challengeType: "..."
+  "sitekey": "MCowBQYDK2VwAyEA...",
+  "widgetId": "w-xxxxxxxx",
+  "cdata": "...",
+  "beh": { /* BehaviorCollector.snapshot() */ },
+  "ts": 1234567890
 }
 ```
 
----
+**Challenge tipleri:** `slide`, `rotate`, `icon`, `swap`, `emoji_swap`, `shortest_line`, `x_marker`, `height_match`, `line_break`, `gobang`
 
-## 4. Bot Detection — Behavior Analizi
+### Key Derivation
 
-### 4.1 Toplanan Mouse/Interaction Verileri
-```js
-points           // Mouse koordinat history
-lastPointTime    // Son point timestamp
-enterTime        // Widget'a mouse girişi zamanı
-leaveCount       // Widget'tan kaç kez çıkıldı
-clickX, clickY   // Click koordinatı
-clickDuration    // Click basılı kalma süresi
-clickTrusted     // isTrusted eventi mi?
-clickButton      // Hangi mouse button
-mousedownTime    // Mousedown timestamp
-eventSeq         // Event sequence
-trustedCount     // Trusted event sayısı
-totalCount       // Toplam event sayısı
-firstInteractionTime
-hoverStartTime
-docFocusAtClick  // Click anında document focused mu?
-visStateAtClick  // Click anında visibility state
-focusChanges     // Focus değişim sayısı
-pointerType      // mouse|touch|pen
-pressure         // Touch pressure
-cdpScreen        // CDP (Chrome DevTools Protocol) screen info
-```
+`/api/c` response'u XChaCha20-Poly1305 ile şifreli gelir.
+Key türetme: `BLAKE2b(key=siteKey, data=url+userAgent, dkLen=64)` → 64 byte → `[32..64]` response key olarak kullanılır.
 
-### 4.2 Bot Detection Sinyalleri
-```js
-// Navigator/Window özellik kontrolleri
-webdriver              ← window.webdriver kontrol
-plugins                ← navigator.plugins
-"HeadlessChrome|PhantomJS"  ← UA regex
-"^cdc_|^__pw_|^__playwright|^__selenium|^__driver"  ← global değişken tespiti
-"^([a-zA-Z_$][a-zA-Z0-9_$]{15,})_(Array|Promise|Symbol)$"  ← Playwright/Selenium inject
+### Bot Detection
 
-// Headless tespiti
-headless               ← userAgentData brands içinde
-crossOriginIsolated
-userActivation.hasBeenActive
-
-// Debugger tespiti (Worker thread'de)
-"(function(){debugger})()"  ← Timing attack ile debugger tespiti
-// Worker kodu (decoded):
-self.onmessage = function() {
-    var F = (0).constructor.constructor;  // Function constructor
-    var r = { e1: 0, e2: 0, e3: 0 };
-    try { r.e1 = F("p","var t=p.now();(function(){debugger})();return p.now()-t")(performance) }
-    try { r.e2 = F("p","var s=0,i=3;while(i--){var t=p.now();...debugger...;s+=p.now()-t}return s")(performance) }
-    try { r.e3 = F("d","var t=d.now();(function(){debugger})();return d.now()-t")(Date) }
-    self.postMessage(r);
-}
-// e1/e2/e3 > 100ms ise debugger açık demek
-
-// Notification permission
-Notification.permission === "denied"  ← headless browser sinyali
-
-// Speech synthesis
-speechSynthesis.getVoices()  ← bot'larda genelde boş
-
-// Chrome-specific kontroller
-chrome.app.runtime
-chrome.runtime
-```
-
-### 4.3 Edge/Pattern Analizi
-Mouse hareketi edge'den mi geliyor (bot) yoksa organik mi diye analiz:
-```
-_isOnEdge()         // Fare ekran kenarına yakın mı?
-_analyzeMousePath() // Hareket doğrusal mı? (bot genelde lineer hareket eder)
-_movesFromEdge()    // Edge'den başlayan harekeler
-_countEdgeSegments()
-_checkHoverPattern()
-LEFT, RIGHT, TOP, BOTTOM  // Hangi edge
-```
-
-### 4.4 Cihaz Profilleri (Simülasyon / Karşılaştırma için)
-Kod, gerçek cihaz karakteristiklerini bilinen profiller ile karşılaştırıyor:
-
-| Profil | UA | GPU |
-|--------|-----|-----|
-| low-mobile | Samsung SM-A105F, Chrome 120 | Adreno (TM) 504 |
-| mid-mobile | Pixel 6, Chrome 120 | Mali-G78 |
-| high-mobile | iPhone iOS 17 | Apple GPU |
-| tablet | iPad iOS 17 | Apple GPU |
-| low-desktop | Windows, Chrome 120 | Intel UHD 620 |
-| mid-desktop | Windows, Chrome 120 | NVIDIA RTX 3060 |
-| high-desktop | Windows, Chrome 120 | NVIDIA RTX 4080 |
-| workstation | Windows, Chrome 120 | NVIDIA RTX 4090 |
-
-`_simSolveTime` ile simüle edilen cihaza göre PoW çözme süresi ayarlanıyor (bot tespitini geçmek için gerçekçi timing).
+- `BehaviorCollector`: mouse path, click isTrusted, coalesced events, edge margin analizi
+- Debugger timing testi (Web Worker içinde `performance.now()` + `debugger`)
+- Canvas/WebGL fingerprint, navigator.webdriver, headless UA tespiti
+- `simulateDevice` modu: bilinen cihaz profillerine göre PoW çözme süresi simülasyonu
 
 ---
 
-## 5. Proof-of-Work (PoW) Mekanizması
+## Kullanılan Sitekey
 
 ```
-algorithm: "SHA-256" | "SHA-384" | "SHA-512"
-maxnumber: N           // Arama uzayı üst sınırı
-workers: N             // Kaç web worker paralel çalışacak
-reportInterval: N      // İlerleme raporlama
+MCowBQYDK2VwAyEAh9U4pnLe55svXLJExCzVwVA0fE0m82tgyfYbz6Sm0ec
+```
+(patched.to/member.php?action=login sayfasından alındı)
+
+---
+
+## Kurulum
+
+```bash
+npm install
 ```
 
-PoW çözümü:
-1. Server `POST /api/c` ile challenge + signature gönderir
-2. Client belirtilen algoritmada hash hesaplar, hedefi bulan nonce'ı arar
-3. `solveMainThread` veya `Worker` thread'de çalışır
-4. Çözüm bulununca `POST /api/q` ile gönderilir
-5. Server `took` (çözme süresi) değerini kontrol eder — çok hızlıysa bot sinyali
+Gerekli paketler: `puppeteer`, `@noble/hashes`, `@noble/ciphers`
 
 ---
 
-## 6. Fingerprinting Verileri
+## Çalıştırma Sırası
 
-`/api/c` isteğine şu fingerprint verileri gönderiliyor:
+```bash
+# 1. api.js'i indir
+node fetch_and_extract/fetch_apijs.js
 
-```js
-{
-    userAgent,
-    screen: { availWidth, availHeight, colorDepth, pixelDepth },
-    pixelRatio,
-    viewport: { width, height },
-    touchSupport: { maxTouchPoints, touchEvent, touchPoints },
-    connection: { effectiveType, downlink, rtt, saveData },
-    webgl: { vendor, renderer },
-    hardwareConcurrency,
-    deviceMemory,
-    platform,
-    timezone: { timezone, offset },
-    language, languages,
-    cookieEnabled,
-    doNotTrack,
-    features: {
-        webWorker, serviceWorker, webCrypto,
-        localStorage, sessionStorage, indexedDB,
-        webGL, webGL2, webp
-    },
-    timestamp,
-    canvasHash,   // Canvas fingerprint
-    webglHash,    // WebGL fingerprint
-    beh: {...},   // Behavior data (mouse movements etc.)
-    adb: {...},   // Ad blocker tespiti
-    nai: {...},   // Navigator integrity
-    jsd: {...},   // JS debugger tespiti
-    ccr: {...}    // Chrome runtime kontrolleri
-}
+# 2. String tablosunu decode et
+node decode_and_deobf/decode_apijs_full.js
+
+# 3. Endpoint analizi
+node find_and_analyze/find_init_endpoint.js
+
+# 4. /api/c testleri
+node test_and_validate/test_real.js
+
+# 5. Gerçek widget ile test (puppeteer gerekli)
+node widget_and_token/debug_widget.js
 ```
-
----
-
-## 7. Hata Yönetimi
-
-| Hata Kodu | Mesaj | Açıklama |
-|-----------|-------|----------|
-| `timeout` | "Request timed out" | PoW veya API timeout |
-| `network` | "Connection failed" | Ağ hatası |
-| `server` | "Server unavailable" | 5xx HTTP |
-| `notfound` | "Service not found" | 404 |
-| `invalid` | "Invalid response" | Response format yanlış |
-| `auth` | "Access denied" / "Too many requests" | Rate limit |
-| `ratelimit` | "Too many requests. Please try again later" | 429 |
-| `rejected` | "Request failed" | Generic |
-| `config` | "Parent bridge not configured" | Widget yanlış init |
-| `verification` | "Missing result token" | Token yok |
-| `solution` | debugger detected? | Özel durum |
-
----
-
-## 8. Güvenlik Gözlemleri
-
-1. **Anti-debug Worker**: Bir Worker thread'de `debugger` statement timing'i ölçülüyor. DevTools açıksa e1/e2/e3 değerleri yüksek çıkacak ve challenge başarısız olabilir.
-
-2. **Proxy Fetch**: Widget kendi fetch yapmak yerine parent frame'den proxy request yapıyor (`PROXY_FETCH_REQUEST` → parent → `PROXY_FETCH_RESPONSE`). Bu iframe'in network erişimini sınırlandıran CSP'leri bypass etmek için.
-
-3. **MessagePack şifreli iletişim**: Challenge ve verify API'leri JSON değil, MessagePack + ChaCha20 kullanıyor. Plain-text sniffing'i zorlaştırıyor.
-
-4. **Timing attack**: Server `took` değerini doğruluyor. Çok hızlı çözüm (bot) veya çok yavaş (fake delay) tespit ediliyor. `_simSolveTime` ile bilinen cihaz profilleri karşılaştırması yapılıyor.
-
-5. **Origin validation**: `parentOrigin` ile sadece beklenen origin'den mesaj kabul ediliyor.
-
-6. **cdata validation**: `^[a-zA-Z0-9_-]{1,255}$` — strict regex.
-
-7. **İlk 93 string'ler**: Hash/nonce gibi görünen bu string'ler muhtemelen build-time integrity token'ları veya lisans key'leri. Runtime'da karşılaştırılabilir.
-
----
-
-## 9. Özet
-
-`cntsw.js`, **patched.to** platformunun "Continental" adlı CAPTCHA/bot-detection sisteminin iframe widget kodudur.
-
-**Ne yapar:**
-- Kullanıcı etkileşimini (mouse, keyboard, touch) toplar
-- Browser fingerprint'i çıkarır
-- Headless/bot/debugger tespiti yapar
-- Server'dan puzzle challenge alır (slide, rotate, gobang vb.)
-- Proof-of-Work hesaplar
-- Tüm veriyi MessagePack + ChaCha20 ile şifreli gönderir
-- Sonucu parent frame'e postMessage ile iletir
-
-**Kullanılan kütüphaneler (gömülü):**
-- `@msgpack/msgpack` — binary serialization
-- `@noble/hashes` (sha256/384/512, blake) — PoW hashing
-- `@noble/ciphers` (chacha20-poly1305) — iletişim şifreleme
-
-**Obfuscation yöntemi:**
-- Custom base91 codec ile 1438 string encode edilmiş
-- İki ayrı IIFE, iki ayrı alphabet kullanıyor
-- Tüm property/method isimleri `e(N)` lookup ile gizlenmiş (4506 çağrı)
-- Tek satır, minified
