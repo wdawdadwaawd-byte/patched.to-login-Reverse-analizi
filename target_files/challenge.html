@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="darkreader-lock">
+        <meta name="color-scheme" content="light dark">
+        <title>Continental Verification</title>
+        <style>
+            .continental-widget {
+                --c-width: 304px;
+                --c-height: 78px;
+                --c-checkbox-size: 26px;
+                --c-bg: #ffffff;
+                --c-bg-subtle: #f8f8f7;
+                --c-border: #e2e0dc;
+                --c-border-hover: #c8c5bf;
+                --c-text: #1a1a1a;
+                --c-text-muted: #7a7770;
+                --c-success: #2ea043;
+                --c-success-glow: rgba(46, 160, 67, 0.15);
+                --c-error: #e5534b;
+                --c-error-soft: #d1242f;
+                --c-accent: #4f6bed;
+                --c-accent-soft: rgba(79, 107, 237, 0.08);
+                --c-spinner: #4f6bed;
+                --c-ripple: rgba(79, 107, 237, 0.14);
+                --c-hover-fill: rgba(0, 0, 0, 0.025);
+                --c-checkbox-glow: rgba(79, 107, 237, 0.10);
+                --c-shadow: 0 1px 2px rgba(0,0,0,0.04),0 2px 8px rgba(0,0,0,0.06);
+                --c-shadow-hover: 0 2px 6px rgba(0,0,0,0.07),0 6px 20px rgba(0,0,0,0.09)
+            }
+
+            .continental-widget[data-theme=dark] {
+                --c-bg: #1c1c1e;
+                --c-bg-subtle: #252528;
+                --c-border: #3a3a3d;
+                --c-border-hover: #4e4e52;
+                --c-text: #f0eeeb;
+                --c-text-muted: #8a8884;
+                --c-success: #56d364;
+                --c-success-glow: rgba(86, 211, 100, 0.12);
+                --c-error: #f47067;
+                --c-error-soft: #f85149;
+                --c-accent: #6b8aff;
+                --c-accent-soft: rgba(107, 138, 255, 0.07);
+                --c-spinner: #6b8aff;
+                --c-ripple: rgba(107, 138, 255, 0.12);
+                --c-hover-fill: rgba(255, 255, 255, 0.035);
+                --c-checkbox-glow: rgba(107, 138, 255, 0.08);
+                --c-shadow: 0 1px 2px rgba(0,0,0,0.2),0 2px 8px rgba(0,0,0,0.25);
+                --c-shadow-hover: 0 2px 6px rgba(0,0,0,0.3),0 8px 24px rgba(0,0,0,0.4)
+            }
+
+            .continental-widget[data-size=compact] {
+                --c-width: 156px;
+                --c-height: 144px
+            }
+
+            *,::after,::before {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0
+            }
+
+            :host {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                background: var(--c-bg);
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale
+            }
+
+            :host::-webkit-scrollbar {
+                display: none
+            }
+
+            .continental-widget {
+                font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+                width: 100%;
+                max-width: var(--c-width);
+                min-width: 150px;
+                height: var(--c-height);
+                background: var(--c-bg);
+                border: 1px solid var(--c-border);
+                border-radius: 10px;
+                position: relative;
+                display: flex;
+                align-items: center;
+                box-sizing: border-box;
+                box-shadow: var(--c-shadow);
+                overflow: hidden;
+                transition: box-shadow .35s cubic-bezier(.25, .46, .45, .94),border-color .3s ease;
+                user-select: none;
+                -webkit-user-select: none
+            }
+
+            .continental-widget:hover {
+                box-shadow: var(--c-shadow-hover);
+                border-color: var(--c-border-hover)
+            }
+
+            .continental-main {
+                display: flex;
+                align-items: center;
+                padding: 0 14px;
+                gap: 14px;
+                width: 100%;
+                height: 100%;
+                cursor: pointer;
+                transition: background .2s ease
+            }
+
+            .continental-main:hover {
+                background: var(--c-hover-fill)
+            }
+
+            [data-state=verified] .continental-main,[data-state=verifying] .continental-main {
+                cursor: default;
+                background: 0 0!important
+            }
+
+            .continental-widget[data-size=compact] .continental-main {
+                flex-direction: column;
+                justify-content: center;
+                text-align: center;
+                gap: 6px;
+                padding: 10px 13px 28px
+            }
+
+            .continental-widget[data-size=compact] .continental-content {
+                margin-right: 0
+            }
+
+            .continental-checkbox {
+                position: relative;
+                width: var(--c-checkbox-size);
+                height: var(--c-checkbox-size);
+                min-width: var(--c-checkbox-size);
+                background: 0 0;
+                border: none;
+                cursor: pointer;
+                outline: 0;
+                -webkit-tap-highlight-color: transparent
+            }
+
+            .checkbox-frame {
+                position: absolute;
+                inset: 0;
+                border: 2px solid var(--c-border);
+                border-radius: 6px;
+                background: var(--c-bg);
+                transition: all .25s cubic-bezier(.25, .46, .45, .94)
+            }
+
+            .continental-checkbox:hover .checkbox-frame,.continental-main:hover .checkbox-frame {
+                border-color: var(--c-accent);
+                box-shadow: 0 0 0 2px var(--c-checkbox-glow)
+            }
+
+            [data-state=verified] .continental-main:hover .checkbox-frame,[data-state=verifying] .continental-main:hover .checkbox-frame {
+                border-color: transparent;
+                background: 0 0;
+                box-shadow: none
+            }
+
+            .checkbox-ripple {
+                position: absolute;
+                inset: -10px;
+                border-radius: 50%;
+                background: var(--c-ripple);
+                transform: scale(0);
+                opacity: 0
+            }
+
+            .continental-checkbox:active .checkbox-ripple {
+                animation: ripple-out .5s cubic-bezier(0,0,.2,1)
+            }
+
+            @keyframes ripple-out {
+                0% {
+                    transform: scale(0);
+                    opacity: 1
+                }
+
+                100% {
+                    transform: scale(1.2);
+                    opacity: 0
+                }
+            }
+
+            .checkbox-spinner {
+                position: absolute;
+                inset: -3px;
+                opacity: 0;
+                transition: opacity .3s ease
+            }
+
+            .checkbox-spinner svg {
+                width: 100%;
+                height: 100%
+            }
+
+            .checkbox-spinner .spinner-track {
+                fill: none;
+                stroke: var(--c-spinner);
+                stroke-width: 2;
+                opacity: .15
+            }
+
+            .checkbox-spinner .spinner-arc {
+                fill: none;
+                stroke: var(--c-spinner);
+                stroke-width: 2.5;
+                stroke-linecap: round;
+                stroke-dasharray: 40 80;
+                transform-origin: 16px 16px;
+                animation: spinner-rotate .75s cubic-bezier(.4,0,.2,1) infinite
+            }
+
+            @keyframes spinner-rotate {
+                0% {
+                    transform: rotate(0);
+                    stroke-dasharray: 10 110
+                }
+
+                50% {
+                    stroke-dasharray: 50 70
+                }
+
+                100% {
+                    transform: rotate(360deg);
+                    stroke-dasharray: 10 110
+                }
+            }
+
+            .checkbox-check {
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transform: scale(.5);
+                transition: all .2s ease
+            }
+
+            .checkbox-check svg {
+                width: 20px;
+                height: 20px
+            }
+
+            .checkbox-check path {
+                fill: none;
+                stroke: var(--c-success);
+                stroke-width: 2.8;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+                stroke-dasharray: 30;
+                stroke-dashoffset: 30
+            }
+
+            .checkbox-error {
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transform: scale(.5);
+                transition: all .2s ease
+            }
+
+            .checkbox-error svg {
+                width: 22px;
+                height: 22px
+            }
+
+            .checkbox-error circle {
+                fill: var(--c-error-soft)
+            }
+
+            .checkbox-error path {
+                stroke: white;
+                stroke-width: 2;
+                stroke-linecap: round
+            }
+
+            .continental-content {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+                flex: 1;
+                margin-right: 52px
+            }
+
+            .continental-label {
+                color: var(--c-text);
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: -.01em;
+                transition: all .3s cubic-bezier(.25, .46, .45, .94)
+            }
+
+            .continental-status {
+                font-size: 14px;
+                font-weight: 500;
+                color: var(--c-text);
+                letter-spacing: -.01em;
+                margin-top: 0;
+                opacity: 0;
+                transform: translateY(-6px);
+                transition: all .35s cubic-bezier(.25, .46, .45, .94)
+            }
+
+            .continental-hint {
+                font-size: 10px;
+                color: var(--c-text-muted);
+                opacity: 0;
+                height: 0;
+                overflow: hidden;
+                transition: all .3s ease
+            }
+
+            .continental-progress-bar {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                height: 2px;
+                width: 0;
+                background: linear-gradient(90deg,var(--c-accent),var(--c-spinner));
+                border-radius: 0 0 10px 10px;
+                overflow: hidden;
+                transition: width .4s cubic-bezier(.25, .46, .45, .94),background .3s ease,opacity .4s ease
+            }
+
+            .continental-progress-bar::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);
+                animation: progress-shimmer 1.5s ease-in-out infinite
+            }
+
+            @keyframes progress-shimmer {
+                0% {
+                    transform: translateX(-100%)
+                }
+
+                100% {
+                    transform: translateX(100%)
+                }
+            }
+
+            [data-state=verified] .continental-progress-bar::after {
+                animation: none
+            }
+
+            .continental-branding {
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+                user-select: none;
+                -webkit-user-select: none;
+                pointer-events: none
+            }
+
+            .continental-logo {
+                width: 30px;
+                height: 30px
+            }
+
+            .continental-brand-name {
+                font-size: 9px;
+                font-weight: 500;
+                color: var(--c-text-muted);
+                letter-spacing: .02em;
+                text-transform: uppercase
+            }
+
+            [data-hide-logo=true] .continental-branding {
+                display: none
+            }
+
+            [data-hide-logo=true] .continental-content {
+                margin-right: 0
+            }
+
+            .continental-widget[data-size=compact] .continental-branding {
+                position: absolute;
+                right: auto;
+                left: 50%;
+                top: auto;
+                bottom: 8px;
+                transform: translateX(-50%);
+                flex-direction: row;
+                align-items: center;
+                gap: 4px
+            }
+
+            .continental-widget[data-size=compact] .continental-logo {
+                width: 18px;
+                height: 18px
+            }
+
+            .continental-widget[data-size=compact] .continental-brand-name {
+                font-size: 8px
+            }
+
+            [data-state=verifying] .checkbox-frame {
+                border-color: transparent;
+                background: 0 0;
+                opacity: 0;
+                transform: scale(.8)
+            }
+
+            [data-state=verifying] .checkbox-spinner {
+                opacity: 1
+            }
+
+            [data-state=verifying] .continental-status {
+                opacity: 1;
+                transform: translateY(0)
+            }
+
+            [data-state=verifying] .continental-label {
+                display: none
+            }
+
+            [data-state=verified] .continental-checkbox {
+                cursor: default
+            }
+
+            [data-state=verified] .checkbox-frame {
+                border-color: transparent;
+                background: 0 0;
+                opacity: 0;
+                transition: opacity .3s ease
+            }
+
+            [data-state=verified] .checkbox-spinner {
+                opacity: 1;
+                transition: opacity .4s cubic-bezier(.4, 0, .2, 1)
+            }
+
+            [data-state=verified] .checkbox-spinner .spinner-arc {
+                animation: spinner-decelerate .35s cubic-bezier(.4,0,1,1) forwards
+            }
+
+            @keyframes spinner-decelerate {
+                0% {
+                    stroke-dasharray: 40 80;
+                    opacity: 1
+                }
+
+                100% {
+                    stroke-dasharray: 75 45;
+                    opacity: .3
+                }
+            }
+
+            .verified-phase-check .checkbox-spinner {
+                opacity: 0!important;
+                transition: opacity .2s ease-out!important
+            }
+
+            [data-state=verified] .checkbox-check {
+                opacity: 0;
+                transform: scale(.6)
+            }
+
+            .verified-phase-check .checkbox-check {
+                animation: check-enter .5s cubic-bezier(.175,.885,.32,1.275) forwards
+            }
+
+            @keyframes check-enter {
+                0% {
+                    opacity: 0;
+                    transform: scale(.4)
+                }
+
+                40% {
+                    opacity: 1;
+                    transform: scale(1.08)
+                }
+
+                65% {
+                    transform: scale(.96)
+                }
+
+                85% {
+                    transform: scale(1.02)
+                }
+
+                100% {
+                    opacity: 1;
+                    transform: scale(1)
+                }
+            }
+
+            .verified-phase-check .checkbox-check path {
+                animation: draw-check .5s cubic-bezier(.4,0,.2,1) 80ms forwards
+            }
+
+            @keyframes draw-check {
+                0% {
+                    stroke-dashoffset: 30
+                }
+
+                100% {
+                    stroke-dashoffset: 0
+                }
+            }
+
+            [data-state=verified] .continental-label {
+                color: var(--c-text);
+                opacity: 0;
+                transform: translateY(6px);
+                transition: none
+            }
+
+            .verified-phase-label .continental-label {
+                animation: label-rise .45s cubic-bezier(.25,.46,.45,.94) forwards
+            }
+
+            @keyframes label-rise {
+                0% {
+                    opacity: 0;
+                    transform: translateY(6px);
+                    filter: blur(2px)
+                }
+
+                60% {
+                    filter: blur(0)
+                }
+
+                100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                    filter: blur(0)
+                }
+            }
+
+            [data-state=verified] .continental-progress-bar {
+                transition: background .6s cubic-bezier(.25, .46, .45, .94)
+            }
+
+            .verified-phase-check .continental-progress-bar {
+                background: var(--c-success)!important;
+                opacity: 0
+            }
+
+            [data-state=error] .continental-progress-bar {
+                opacity: 0;
+                transition: opacity .3s ease
+            }
+
+            .continental-error-banner {
+                display: none;
+                font-size: 11px;
+                color: var(--c-error);
+                font-weight: 500;
+                padding: 2px 6px;
+                border-radius: 4px;
+                background: rgba(229,83,75,.08)
+            }
+
+            .continental-error-banner::before {
+                content: '\26A0\00a0';
+                font-size: 1.1em
+            }
+
+            .continental-widget[data-theme=dark] .continental-error-banner {
+                background: rgba(244,112,103,.1)
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .continental-widget[data-theme=auto] .continental-error-banner {
+                    background:rgba(244,112,103,.1)
+                }
+            }
+
+            [data-state=error] .checkbox-frame {
+                border-color: var(--c-error)
+            }
+
+            [data-state=error] .continental-error-banner {
+                display: block;
+                animation: fade-slide-in .3s ease-out
+            }
+
+            @keyframes fade-slide-in {
+                0% {
+                    opacity: 0;
+                    transform: translateY(-4px)
+                }
+
+                100% {
+                    opacity: 1;
+                    transform: translateY(0)
+                }
+            }
+
+            .continental-widget[data-size=compact][data-state=error] .continental-error-banner {
+                position: absolute;
+                top: 4px;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 10px
+            }
+
+            [data-state=error] .continental-widget {
+                animation: shake .45s cubic-bezier(.36,.07,.19,.97)
+            }
+
+            @keyframes shake {
+                0%,100% {
+                    transform: translateX(0)
+                }
+
+                15% {
+                    transform: translateX(-5px)
+                }
+
+                30% {
+                    transform: translateX(4px)
+                }
+
+                45% {
+                    transform: translateX(-3px)
+                }
+
+                60% {
+                    transform: translateX(2px)
+                }
+
+                75% {
+                    transform: translateX(-1px)
+                }
+            }
+
+            [data-state=expired] .continental-widget {
+                border-style: dashed;
+                border-color: var(--c-error-soft)
+            }
+
+            [data-state=expired] .checkbox-frame {
+                border-color: var(--c-error-soft);
+                border-style: dashed
+            }
+
+            [data-state=expired] .continental-status {
+                color: var(--c-error-soft)
+            }
+
+            [data-state=expired] .continental-label {
+                opacity: 0;
+                position: absolute
+            }
+
+            [data-state=expired] .continental-status {
+                opacity: 1;
+                transform: translateY(0)
+            }
+
+            [data-state=expired] .continental-hint {
+                opacity: 1;
+                height: auto;
+                margin-top: 2px
+            }
+
+            [data-state=failed] .continental-main,[data-state=failed] .continental-main:hover .checkbox-frame {
+                cursor: not-allowed
+            }
+
+            [data-state=failed] .checkbox-frame {
+                border-color: var(--c-error);
+                opacity: .5
+            }
+
+            [data-state=failed] .continental-error-banner {
+                display: block;
+                animation: fade-slide-in .3s ease-out
+            }
+
+            [data-state=failed] .continental-label {
+                opacity: 0;
+                position: absolute
+            }
+
+            [data-state=failed] .continental-hint {
+                opacity: 0;
+                height: 0
+            }
+
+            @media (prefers-reduced-motion:reduce) {
+                *,::after,::before {
+                    animation-duration: 0s!important;
+                    transition-duration: 0s!important
+                }
+
+                .spinner-arc {
+                    animation-duration: .75s!important
+                }
+            }
+
+            .continental-checkbox::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 44px;
+                height: 44px;
+                transform: translate(-50%,-50%)
+            }
+
+            .continental-checkbox:focus-visible .checkbox-frame {
+                box-shadow: 0 0 0 2px var(--c-ripple);
+                border-color: var(--c-accent)
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .continental-widget[data-theme=auto] {
+                    --c-bg:#1c1c1e;
+                    --c-bg-subtle: #252528;
+                    --c-border: #3a3a3d;
+                    --c-border-hover: #4e4e52;
+                    --c-text: #f0eeeb;
+                    --c-text-muted: #8a8884;
+                    --c-success: #56d364;
+                    --c-success-glow: rgba(86, 211, 100, 0.12);
+                    --c-error: #f47067;
+                    --c-error-soft: #f85149;
+                    --c-accent: #6b8aff;
+                    --c-accent-soft: rgba(107, 138, 255, 0.07);
+                    --c-spinner: #6b8aff;
+                    --c-ripple: rgba(107, 138, 255, 0.12);
+                    --c-hover-fill: rgba(255, 255, 255, 0.035);
+                    --c-checkbox-glow: rgba(107, 138, 255, 0.08);
+                    --c-shadow: 0 1px 2px rgba(0,0,0,0.2),0 2px 8px rgba(0,0,0,0.25);
+                    --c-shadow-hover: 0 2px 6px rgba(0,0,0,0.3),0 8px 24px rgba(0,0,0,0.4)
+                }
+            }
+
+            @media (max-width: 280px) {
+                .continental-branding {
+                    right:8px
+                }
+
+                .continental-logo {
+                    width: 24px;
+                    height: 24px
+                }
+
+                .continental-brand-name {
+                    font-size: 7px
+                }
+
+                .continental-main {
+                    padding: 0 10px;
+                    gap: 10px
+                }
+
+                .continental-label {
+                    font-size: 13px
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <script>
+            !function() {
+                if (window.top !== window.self)
+                    try {
+                        window.__csr = document.body.attachShadow({
+                            mode: "closed"
+                        })
+                    } catch (o) {}
+            }()
+        </script>
+        <div class="continental-widget" role="group" aria-labelledby="continental-label" data-state="idle" data-theme="auto" data-size="normal" data-hide-logo="false">
+            <div class="continental-main">
+                <button class="continental-checkbox" type="button" role="checkbox" aria-checked="false" tabindex="0">
+                    <span class="checkbox-ripple"></span>
+                    <span class="checkbox-frame"></span>
+                    <span class="checkbox-spinner">
+                        <svg viewBox="0 0 32 32">
+                            <circle class="spinner-track" cx="16" cy="16" r="12"/>
+                            <circle class="spinner-arc" cx="16" cy="16" r="12"/>
+                        </svg>
+                    </span>
+                    <span class="checkbox-check">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M4.5 12.5l5 5L19.5 7"/>
+                        </svg>
+                    </span>
+                    <span class="checkbox-error">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="11"/>
+                            <path d="M8 8l8 8M16 8l-8 8"/>
+                        </svg>
+                    </span>
+                </button>
+                <div class="continental-content">
+                    <span class="continental-error-banner" role="alert"></span>
+                    <label id="continental-label" class="continental-label">I'm not a robot</label>
+                    <span id="continental-status" class="continental-status" role="status" aria-live="polite"></span>
+                    <span class="continental-hint"></span>
+                </div>
+            </div>
+            <div class="continental-progress-bar"></div>
+            <div class="continental-branding">
+                <img class="continental-logo" id="continental-logo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32'%3E%3Cdefs%3E%3ClinearGradient id='sg' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%235B8DEF'/%3E%3Cstop offset='100%25' stop-color='%233A6BD5'/%3E%3C/linearGradient%3E%3ClinearGradient id='cg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%2367A3FF'/%3E%3Cstop offset='100%25' stop-color='%234B83E0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 2 L28 7 L28 15 C28 22.5 22.5 28.5 16 30 C9.5 28.5 4 22.5 4 15 L4 7 Z' fill='url(%23sg)' stroke='%234A7AD4' stroke-width='0.5'/%3E%3Cpath d='M16 4.5 L26 8.8 L26 15 C26 21.3 21.3 26.8 16 28.2 C10.7 26.8 6 21.3 6 15 L6 8.8 Z' fill='none' stroke='%23ffffff' stroke-width='0.4' opacity='0.25'/%3E%3Ccircle cx='16' cy='14' r='3.2' fill='none' stroke='%23ffffff' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='14' r='1' fill='%23ffffff'/%3E%3Cline x1='16' y1='10.8' x2='16' y2='7' stroke='%23ffffff' stroke-width='1' stroke-linecap='round'/%3E%3Cline x1='16' y1='17.2' x2='16' y2='21' stroke='%23ffffff' stroke-width='1' stroke-linecap='round'/%3E%3Cline x1='12.8' y1='14' x2='9' y2='14' stroke='%23ffffff' stroke-width='1' stroke-linecap='round'/%3E%3Cline x1='19.2' y1='14' x2='23' y2='14' stroke='%23ffffff' stroke-width='1' stroke-linecap='round'/%3E%3Cline x1='13.7' y1='11.7' x2='11.5' y2='9.5' stroke='%23ffffff' stroke-width='0.8' stroke-linecap='round' opacity='0.7'/%3E%3Cline x1='18.3' y1='11.7' x2='20.5' y2='9.5' stroke='%23ffffff' stroke-width='0.8' stroke-linecap='round' opacity='0.7'/%3E%3Cline x1='13.7' y1='16.3' x2='11.5' y2='18.5' stroke='%23ffffff' stroke-width='0.8' stroke-linecap='round' opacity='0.7'/%3E%3Cline x1='18.3' y1='16.3' x2='20.5' y2='18.5' stroke='%23ffffff' stroke-width='0.8' stroke-linecap='round' opacity='0.7'/%3E%3Ccircle cx='16' cy='7' r='1' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='16' cy='21' r='1' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='9' cy='14' r='1' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='23' cy='14' r='1' fill='%23ffffff' opacity='0.8'/%3E%3Ccircle cx='11.5' cy='9.5' r='0.8' fill='%23ffffff' opacity='0.5'/%3E%3Ccircle cx='20.5' cy='9.5' r='0.8' fill='%23ffffff' opacity='0.5'/%3E%3Ccircle cx='11.5' cy='18.5' r='0.8' fill='%23ffffff' opacity='0.5'/%3E%3Ccircle cx='20.5' cy='18.5' r='0.8' fill='%23ffffff' opacity='0.5'/%3E%3C/svg%3E" alt="Continental">
+                <span class="continental-brand-name">Continental</span>
+            </div>
+        </div>
+        <script>
+            !function() {
+                var e = window.__csr;
+                if (e) {
+                    var t = document.querySelector("head style");
+                    if (t) {
+                        var n = document.createElement("style");
+                        n.textContent = t.textContent,
+                        e.appendChild(n)
+                    }
+                    for (var r = [], o = document.body.firstChild; o; )
+                        1 === o.nodeType && "SCRIPT" === o.tagName || r.push(o),
+                        o = o.nextSibling;
+                    for (var i = 0; i < r.length; i++)
+                        e.appendChild(r[i]);
+                    var a = !1
+                      , d = e;
+                    Object.defineProperty(window, "__csr", {
+                        get: function() {
+                            if (!a)
+                                return a = !0,
+                                d
+                        },
+                        configurable: !0,
+                        enumerable: !1
+                    })
+                }
+            }()
+        </script>
+        <script src="cntsw.js"></script>
+        <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"07088981c829405cbbe12126664f1ab0","spa":2}' crossorigin="anonymous"></script>
+    </body>
+</html>

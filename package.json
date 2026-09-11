@@ -1,0 +1,18 @@
+{
+  "name": "patched-token-generator",
+  "version": "1.0.0",
+  "description": "patched.to _csrf-token + continental-response token üretici",
+  "main": "token_generator.js",
+  "scripts": {
+    "generate": "node token_generator.js",
+    "generate:http": "node token_generator.js --http-only",
+    "generate:debug": "node token_generator.js --debug"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "puppeteer": "^22.15.0"
+  },
+  "allowScripts": {
+    "puppeteer@22.15.0": true
+  }
+}
